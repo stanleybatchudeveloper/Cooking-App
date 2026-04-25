@@ -111,8 +111,18 @@ export function RecipeCard({
 
         <View style={styles.footer}>
           <View style={styles.counts}>
-            <Text style={styles.countText}>{recipe.likesCount} likes</Text>
-            <Text style={styles.countText}>{recipe.commentsCount} comments</Text>
+            <View style={styles.statPill}>
+              <Ionicons name="heart" size={13} color={palette.danger} />
+              <Text style={styles.statText}>{recipe.favoritesCount ?? 0}</Text>
+            </View>
+            <View style={styles.statPill}>
+              <Ionicons name="thumbs-up-outline" size={13} color={palette.orange} />
+              <Text style={styles.statText}>{recipe.likesCount ?? 0}</Text>
+            </View>
+            <View style={styles.statPill}>
+              <Ionicons name="chatbubble-outline" size={13} color={palette.sage} />
+              <Text style={styles.statText}>{recipe.commentsCount ?? 0}</Text>
+            </View>
           </View>
           <Pressable onPress={onToggleFavorite}>
             <Ionicons
@@ -248,7 +258,21 @@ const styles = StyleSheet.create({
   },
   counts: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 6,
+  },
+  statPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: palette.cream,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  statText: {
+    color: palette.ink,
+    fontSize: 12,
+    fontWeight: '700',
   },
   countText: {
     color: palette.muted,

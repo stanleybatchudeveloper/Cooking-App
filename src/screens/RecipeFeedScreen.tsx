@@ -14,7 +14,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { RecipeCard } from '../components/RecipeCard';
-import { TagChip } from '../components/TagChip';
 import { UserAvatar } from '../components/UserAvatar';
 import { useApp } from '../context/AppContext';
 import { palette } from '../theme/tokens';
@@ -61,6 +60,7 @@ export function RecipeFeedScreen({ mode }: RecipeFeedScreenProps) {
   const [showPantry, setShowPantry] = useState(false);
   const [menuRecipe, setMenuRecipe] = useState<Recipe | null>(null);
   const [snackbarMessage, setSnackbarMessage] = useState<string | null>(null);
+  const [openDropdown, setOpenDropdown] = useState<'category' | 'diet' | 'allergy' | null>(null);
 
   useEffect(() => {
     if (!snackbarMessage) return;
@@ -133,6 +133,42 @@ export function RecipeFeedScreen({ mode }: RecipeFeedScreenProps) {
         ? 'No public recipes yet'
         : 'No favorites yet';
 
+  const dropdownTitle =
+    openDropdown === 'category'
+      ? 'Category'
+      : openDropdown === 'diet'
+        ? 'Diet'
+        : 'Allergy';
+
+  const dropdownSubtitle =
+    openDropdown === 'category'
+      ? 'Choose the kind of meal you want to browse.'
+      : openDropdown === 'diet'
+        ? 'Surface recipes that match a specific eating style.'
+        : 'Hide recipes that contain a specific allergen.';
+
+  const dropdownItems =
+    openDropdown === 'category'
+      ? categories
+      : openDropdown === 'diet'
+        ? dietFilters
+        : allergyFilters;
+
+  const getDropdownOptionLabel = (item: string) =>
+    openDropdown === 'allergy' && item !== 'All' ? `No ${item}` : item;
+
+  const getDropdownOptionHint = (item: string) => {
+    if (item === 'All') {
+      return openDropdown === 'allergy'
+        ? 'Do not hide recipes for allergen matches.'
+        : 'Show every recipe in this feed.';
+    }
+
+    if (openDropdown === 'category') return `Focus on ${item.toLowerCase()} recipes.`;
+    if (openDropdown === 'diet') return `Only show recipes tagged as ${item.toLowerCase()}.`;
+    return `Exclude recipes that include ${item.toLowerCase()}.`;
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
@@ -201,44 +237,36 @@ export function RecipeFeedScreen({ mode }: RecipeFeedScreenProps) {
           </Pressable>
         </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={styles.filterRow}>
-            {categories.map((item) => (
-              <TagChip
-                key={item}
-                label={item}
-                selected={selectedCategory === item}
-                onPress={() => setSelectedCategory(item)}
-              />
-            ))}
-          </View>
-        </ScrollView>
-
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={styles.filterRow}>
-            {dietFilters.map((item) => (
-              <TagChip
-                key={item}
-                label={item}
-                selected={selectedDiet === item}
-                onPress={() => setSelectedDiet(item)}
-              />
-            ))}
-          </View>
-        </ScrollView>
-
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={styles.filterRow}>
-            {allergyFilters.map((item) => (
-              <TagChip
-                key={item}
-                label={item === 'All' ? item : `No ${item}`}
-                selected={selectedAllergy === item}
-                onPress={() => setSelectedAllergy(item)}
-              />
-            ))}
-          </View>
-        </ScrollView>
+        <View style={styles.filterDropdownRow}>
+          {(
+            [
+              { key: 'category' as const, label: 'Category', value: selectedCategory },
+              { key: 'diet' as const, label: 'Diet', value: selectedDiet },
+              { key: 'allergy' as const, label: 'Allergy', value: selectedAllergy },
+            ]
+          ).map((filter) => {
+            const isActive = filter.value !== 'All';
+            return (
+              <Pressable
+                key={filter.key}
+                style={[styles.filterDropdown, isActive && styles.filterDropdownActive]}
+                onPress={() => setOpenDropdown(filter.key)}
+              >
+                <Text
+                  style={[styles.filterDropdownLabel, isActive && styles.filterDropdownLabelActive]}
+                  numberOfLines={1}
+                >
+                  {filter.value === 'All' ? filter.label : filter.value}
+                </Text>
+                <Ionicons
+                  name="chevron-down"
+                  size={14}
+                  color={isActive ? palette.sage : palette.muted}
+                />
+              </Pressable>
+            );
+          })}
+        </View>
 
         {selectedIds.length ? (
           <View style={styles.selectionBar}>
@@ -408,6 +436,85 @@ export function RecipeFeedScreen({ mode }: RecipeFeedScreenProps) {
         </SafeAreaView>
       </Modal>
 
+      {openDropdown ? (
+        <View style={styles.dropdownOverlay} pointerEvents="box-none">
+          <Pressable style={styles.dropdownBackdrop} onPress={() => setOpenDropdown(null)} />
+          <View style={styles.dropdownSheetWrap} pointerEvents="box-none">
+            <Pressable style={styles.dropdownSheet} onPress={() => undefined}>
+              <View style={styles.dropdownHandle} />
+              <View style={styles.dropdownHeader}>
+                <View style={styles.dropdownHeaderCopy}>
+                  <Text style={styles.dropdownTitle}>{dropdownTitle}</Text>
+                  <Text style={styles.dropdownSubtitle}>{dropdownSubtitle}</Text>
+                </View>
+                <Pressable
+                  onPress={() => setOpenDropdown(null)}
+                  style={styles.dropdownCloseButton}
+                >
+                  <Ionicons name="close" size={18} color={palette.ink} />
+                </Pressable>
+              </View>
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.dropdownOptionsContent}
+              >
+                {dropdownItems.map((item) => {
+                  const isSelected =
+                    openDropdown === 'category'
+                      ? selectedCategory === item
+                      : openDropdown === 'diet'
+                        ? selectedDiet === item
+                        : selectedAllergy === item;
+                  return (
+                    <Pressable
+                      key={item}
+                      style={[styles.dropdownOption, isSelected && styles.dropdownOptionActive]}
+                      onPress={() => {
+                        if (openDropdown === 'category') setSelectedCategory(item);
+                        else if (openDropdown === 'diet') setSelectedDiet(item);
+                        else setSelectedAllergy(item);
+                        setOpenDropdown(null);
+                      }}
+                    >
+                      <View style={styles.dropdownOptionCopy}>
+                        <Text
+                          style={[
+                            styles.dropdownOptionText,
+                            isSelected && styles.dropdownOptionSelected,
+                          ]}
+                        >
+                          {getDropdownOptionLabel(item)}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.dropdownOptionHint,
+                            isSelected && styles.dropdownOptionHintActive,
+                          ]}
+                        >
+                          {getDropdownOptionHint(item)}
+                        </Text>
+                      </View>
+                      {isSelected ? (
+                        <View style={styles.dropdownOptionBadge}>
+                          <Ionicons name="checkmark" size={14} color={palette.sage} />
+                          <Text style={styles.dropdownOptionBadgeText}>Selected</Text>
+                        </View>
+                      ) : (
+                        <Ionicons
+                          name="chevron-forward"
+                          size={16}
+                          color={palette.muted}
+                        />
+                      )}
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
+
       <Modal
         visible={Boolean(menuRecipe)}
         animationType="fade"
@@ -486,6 +593,7 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: palette.cream,
+    position: 'relative',
   },
   header: {
     paddingHorizontal: 20,
@@ -565,6 +673,154 @@ const styles = StyleSheet.create({
   filterRow: {
     flexDirection: 'row',
     marginBottom: 4,
+  },
+  filterDropdownRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 14,
+  },
+  filterDropdown: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: palette.paper,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: palette.line,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    gap: 4,
+  },
+  filterDropdownActive: {
+    borderColor: palette.sage,
+    backgroundColor: '#EEF6EF',
+  },
+  filterDropdownLabel: {
+    flex: 1,
+    color: palette.muted,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  filterDropdownLabelActive: {
+    color: palette.sage,
+  },
+  dropdownOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 30,
+  },
+  dropdownBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(29,39,33,0.38)',
+  },
+  dropdownSheetWrap: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  dropdownSheet: {
+    backgroundColor: palette.cream,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 4,
+    paddingBottom: 30,
+    maxHeight: '70%',
+    borderWidth: 1,
+    borderColor: '#EFE4D3',
+  },
+  dropdownHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: palette.line,
+    alignSelf: 'center',
+    marginTop: 12,
+    marginBottom: 16,
+  },
+  dropdownHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 14,
+  },
+  dropdownHeaderCopy: {
+    flex: 1,
+  },
+  dropdownTitle: {
+    color: palette.ink,
+    fontSize: 20,
+    fontWeight: '900',
+  },
+  dropdownSubtitle: {
+    marginTop: 6,
+    color: palette.muted,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  dropdownCloseButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: palette.line,
+    backgroundColor: palette.paper,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dropdownOptionsContent: {
+    paddingBottom: 12,
+  },
+  dropdownOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    borderRadius: 18,
+    backgroundColor: palette.paper,
+    borderWidth: 1,
+    borderColor: palette.line,
+    marginBottom: 10,
+  },
+  dropdownOptionActive: {
+    backgroundColor: '#EEF6EF',
+    borderColor: '#C9DECC',
+  },
+  dropdownOptionCopy: {
+    flex: 1,
+  },
+  dropdownOptionText: {
+    color: palette.ink,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  dropdownOptionHint: {
+    marginTop: 4,
+    color: palette.muted,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  dropdownOptionSelected: {
+    color: palette.sage,
+  },
+  dropdownOptionHintActive: {
+    color: palette.sage,
+  },
+  dropdownOptionBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: 999,
+    backgroundColor: '#DCECDC',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  dropdownOptionBadgeText: {
+    color: palette.sage,
+    fontSize: 11,
+    fontWeight: '800',
   },
   shoppingItem: {
     flexDirection: 'row',

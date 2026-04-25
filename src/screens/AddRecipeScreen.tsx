@@ -2,14 +2,18 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useNavigation } from '@react-navigation/native';
 import { useEffect, useMemo, useState } from 'react';
+
 import {
   Image,
+  LayoutAnimation,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Switch,
   Text,
   TextInput,
+  UIManager,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -300,9 +304,7 @@ export function AddRecipeScreen({
             multiline
             helper="One ingredient per line"
           />
-        </EditorCard>
 
-        <EditorCard title="Details">
           <Text style={styles.groupLabel}>Category</Text>
           <View style={styles.chipWrap}>
             {categories.filter((item) => item !== 'All').map((item) => (
@@ -328,8 +330,8 @@ export function AddRecipeScreen({
           </View>
 
           <View style={styles.row}>
-            <NumericInput label="Prep" value={prepTime} onChangeText={setPrepTime} />
-            <NumericInput label="Cook" value={cookTime} onChangeText={setCookTime} />
+            <NumericInput label="Prep (min)" value={prepTime} onChangeText={setPrepTime} />
+            <NumericInput label="Cook (min)" value={cookTime} onChangeText={setCookTime} />
             <NumericInput label="Serves" value={servings} onChangeText={setServings} />
           </View>
 
@@ -342,6 +344,48 @@ export function AddRecipeScreen({
             </View>
             <Switch value={isPublic} onValueChange={setIsPublic} />
           </View>
+        </EditorCard>
+
+        <EditorCard title="Cooking Steps">
+          {steps.map((step, index) => (
+            <StepEditor
+              key={index}
+              step={step}
+              index={index}
+              canDelete={steps.length > 1}
+              onChangeInstruction={(value) =>
+                setSteps((current) =>
+                  current.map((item, i) => (i === index ? { ...item, instruction: value } : item)),
+                )
+              }
+              onChangeTimer={(value) =>
+                setSteps((current) =>
+                  current.map((item, i) =>
+                    i === index ? { ...item, timerSeconds: Number(value || 0) } : item,
+                  ),
+                )
+              }
+              onChangeNote={(value) =>
+                setSteps((current) =>
+                  current.map((item, i) => (i === index ? { ...item, specialNote: value } : item)),
+                )
+              }
+              onDelete={() => setSteps((current) => current.filter((_, i) => i !== index))}
+            />
+          ))}
+
+          <Pressable
+            style={styles.addStepButton}
+            onPress={() =>
+              setSteps((current) => [
+                ...current,
+                { instruction: '', timerSeconds: 0, specialNote: '' },
+              ])
+            }
+          >
+            <Ionicons name="add-circle-outline" size={20} color={palette.sage} />
+            <Text style={styles.addStepLabel}>Add Step</Text>
+          </Pressable>
         </EditorCard>
 
         <EditorCard title="Nutrition & Tags">
@@ -371,124 +415,12 @@ export function AddRecipeScreen({
 
           <View style={styles.row}>
             <NumericInput label="Calories" value={calories} onChangeText={setCalories} />
-            <NumericInput
-              label="Protein"
-              value={proteinGrams}
-              onChangeText={setProteinGrams}
-            />
+            <NumericInput label="Protein (g)" value={proteinGrams} onChangeText={setProteinGrams} />
           </View>
           <View style={styles.row}>
-            <NumericInput label="Carbs" value={carbsGrams} onChangeText={setCarbsGrams} />
-            <NumericInput label="Fat" value={fatGrams} onChangeText={setFatGrams} />
+            <NumericInput label="Carbs (g)" value={carbsGrams} onChangeText={setCarbsGrams} />
+            <NumericInput label="Fat (g)" value={fatGrams} onChangeText={setFatGrams} />
           </View>
-        </EditorCard>
-
-        <EditorCard title="Cooking Steps">
-          {steps.map((step, index) => {
-            const { isRecording, startRecording, stopRecording } = useVoiceRecording((text) => {
-              setSteps((current) =>
-                current.map((item, itemIndex) =>
-                  itemIndex === index
-                    ? { ...item, instruction: item.instruction + (item.instruction ? ' ' : '') + text }
-                    : item,
-                ),
-              );
-            });
-
-            return (
-              <View key={`${index}-${step.instruction}`} style={styles.stepCard}>
-                <View style={styles.stepHeader}>
-                  <Text style={styles.stepTitle}>Step {index + 1}</Text>
-                  {steps.length > 1 ? (
-                    <Pressable
-                      onPress={() =>
-                        setSteps((current) => current.filter((_, item) => item !== index))
-                      }
-                    >
-                      <Ionicons name="trash-outline" size={18} color={palette.danger} />
-                    </Pressable>
-                  ) : null}
-                </View>
-                <View style={styles.labelRow}>
-                  <Text style={styles.inputLabel}>Instructions</Text>
-                  <Pressable
-                    style={[
-                      styles.voiceButton,
-                      isRecording ? styles.voiceButtonRecording : undefined,
-                    ]}
-                    onPress={isRecording ? stopRecording : startRecording}
-                  >
-                    <Ionicons
-                      name={isRecording ? 'stop-circle' : 'mic-outline'}
-                      size={16}
-                      color={isRecording ? palette.danger : palette.sage}
-                    />
-                    <Text
-                      style={[
-                        styles.voiceButtonText,
-                        isRecording ? styles.voiceStopText : undefined,
-                      ]}
-                    >
-                      {isRecording ? 'Stop' : 'Talk'}
-                    </Text>
-                  </Pressable>
-                </View>
-                <TextInput
-                  value={step.instruction}
-                  onChangeText={(value) =>
-                    setSteps((current) =>
-                      current.map((item, itemIndex) =>
-                        itemIndex === index ? { ...item, instruction: value } : item,
-                      ),
-                    )
-                  }
-                  multiline
-                  placeholder="Describe the step..."
-                  placeholderTextColor="#98A19B"
-                  style={[styles.input, styles.multilineInput]}
-                />
-                <View style={styles.row}>
-                  <NumericInput
-                    label="Timer (sec)"
-                    value={step.timerSeconds ? String(step.timerSeconds) : ''}
-                    onChangeText={(value) =>
-                      setSteps((current) =>
-                        current.map((item, itemIndex) =>
-                          itemIndex === index
-                            ? { ...item, timerSeconds: Number(value || 0) }
-                            : item,
-                        ),
-                      )
-                    }
-                  />
-                </View>
-                <LabeledInput
-                  label="Special Note"
-                  value={step.specialNote}
-                  onChangeText={(value) =>
-                    setSteps((current) =>
-                      current.map((item, itemIndex) =>
-                        itemIndex === index ? { ...item, specialNote: value } : item,
-                      ),
-                    )
-                  }
-                  multiline
-                />
-              </View>
-            );
-          })}
-
-          <Pressable
-            style={styles.addStepButton}
-            onPress={() =>
-              setSteps((current) => [
-                ...current,
-                { instruction: '', timerSeconds: 0, specialNote: '' },
-              ])
-            }
-          >
-            <Text style={styles.addStepLabel}>Add Step</Text>
-          </Pressable>
         </EditorCard>
 
         <Pressable style={styles.saveButton} onPress={onSave} disabled={isBusy}>
@@ -499,20 +431,139 @@ export function AddRecipeScreen({
   );
 }
 
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
 function EditorCard({
   title,
   children,
+  defaultOpen = true,
 }: {
   title: string;
   children: React.ReactNode;
+  defaultOpen?: boolean;
 }) {
+  const [open, setOpen] = useState(defaultOpen);
+
+  const toggle = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setOpen((v) => !v);
+  };
+
   return (
     <View style={styles.card}>
-      <Text style={styles.cardTitle}>{title}</Text>
-      {children}
+      <Pressable style={styles.cardHeader} onPress={toggle}>
+        <Text style={styles.cardTitle}>{title}</Text>
+        <Ionicons
+          name={open ? 'chevron-up' : 'chevron-down'}
+          size={20}
+          color={palette.muted}
+        />
+      </Pressable>
+      {open ? <View style={styles.cardBody}>{children}</View> : null}
     </View>
   );
 }
+
+function StepEditor({
+  step,
+  index,
+  canDelete,
+  onChangeInstruction,
+  onChangeTimer,
+  onChangeNote,
+  onDelete,
+}: {
+  step: StepData;
+  index: number;
+  canDelete: boolean;
+  onChangeInstruction: (value: string) => void;
+  onChangeTimer: (value: string) => void;
+  onChangeNote: (value: string) => void;
+  onDelete: () => void;
+}) {
+  const { isRecording, startRecording, stopRecording, liveTranscript, detectedLanguage, confidence } =
+    useVoiceRecording((text) => {
+      onChangeInstruction(step.instruction + (step.instruction ? ' ' : '') + text);
+    });
+
+  const getLangEmoji = (lang: string) => {
+    const map: Record<string, string> = {
+      en: '🇺🇸', es: '🇪🇸', fr: '🇫🇷', de: '🇩🇪', it: '🇮🇹',
+      pt: '🇵🇹', ru: '🇷🇺', ja: '🇯🇵', zh: '🇨🇳', ko: '🇰🇷',
+    };
+    return map[lang] ?? '🌐';
+  };
+
+  return (
+    <View style={styles.stepCard}>
+      <View style={styles.stepHeader}>
+        <Text style={styles.stepTitle}>Step {index + 1}</Text>
+        {canDelete ? (
+          <Pressable onPress={onDelete}>
+            <Ionicons name="trash-outline" size={18} color={palette.danger} />
+          </Pressable>
+        ) : null}
+      </View>
+      <View style={styles.labelRow}>
+        <Text style={styles.inputLabel}>Instructions</Text>
+        <View style={styles.voiceControlsWrapper}>
+          {isRecording ? (
+            <View style={styles.liveIndicator}>
+              <View style={styles.recordingDot} />
+              <Text style={styles.recordingText}>
+                {getLangEmoji(detectedLanguage)} {confidence}%
+              </Text>
+            </View>
+          ) : null}
+          <Pressable
+            style={[styles.voiceButton, isRecording ? styles.voiceButtonRecording : undefined]}
+            onPress={isRecording ? stopRecording : startRecording}
+          >
+            <Ionicons
+              name={isRecording ? 'stop-circle' : 'mic-outline'}
+              size={16}
+              color={isRecording ? palette.danger : palette.sage}
+            />
+            <Text style={[styles.voiceButtonText, isRecording ? styles.voiceStopText : undefined]}>
+              {isRecording ? 'Stop' : 'Talk'}
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+      {isRecording && liveTranscript ? (
+        <View style={styles.liveTranscriptBox}>
+          <Text style={styles.liveTranscriptLabel}>Live Transcript</Text>
+          <Text style={styles.liveTranscriptText}>{liveTranscript}</Text>
+        </View>
+      ) : null}
+      <TextInput
+        value={step.instruction}
+        onChangeText={onChangeInstruction}
+        multiline
+        placeholder="Describe the step..."
+        placeholderTextColor="#98A19B"
+        style={[styles.input, styles.multilineInput]}
+      />
+      <View style={styles.row}>
+        <NumericInput
+          label="Timer (sec)"
+          value={step.timerSeconds ? String(step.timerSeconds) : ''}
+          onChangeText={onChangeTimer}
+        />
+      </View>
+      <LabeledInput
+        label="Special Note"
+        value={step.specialNote}
+        onChangeText={onChangeNote}
+        multiline
+      />
+    </View>
+  );
+}
+
+
 
 function LabeledInput({
   label,
@@ -716,16 +767,26 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: palette.white,
     borderRadius: 26,
-    padding: 18,
     borderWidth: 1,
     borderColor: palette.line,
     marginBottom: 16,
+    overflow: 'hidden',
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+  },
+  cardBody: {
+    paddingHorizontal: 18,
+    paddingBottom: 18,
   },
   cardTitle: {
     color: palette.ink,
     fontWeight: '900',
-    fontSize: 20,
-    marginBottom: 14,
+    fontSize: 18,
   },
   groupLabel: {
     color: palette.ink,
@@ -877,14 +938,19 @@ const styles = StyleSheet.create({
   addStepButton: {
     height: 50,
     borderRadius: 16,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: palette.sage,
+    borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    backgroundColor: '#EEF6EF',
   },
   addStepLabel: {
     color: palette.sage,
     fontWeight: '800',
+    fontSize: 15,
   },
   saveButton: {
     height: 58,
