@@ -10,11 +10,13 @@ type RecipeCardProps = {
   selectable?: boolean;
   selected?: boolean;
   showPublicToggle?: boolean;
+  showMoreButton?: boolean;
   onPress: () => void;
   onLongPress?: () => void;
   onToggleFavorite: () => void;
   onTogglePublic?: () => void;
   onAuthorPress?: () => void;
+  onMorePress?: () => void;
 };
 
 export function RecipeCard({
@@ -23,11 +25,13 @@ export function RecipeCard({
   selectable = false,
   selected = false,
   showPublicToggle = false,
+  showMoreButton = false,
   onPress,
   onLongPress,
   onToggleFavorite,
   onTogglePublic,
   onAuthorPress,
+  onMorePress,
 }: RecipeCardProps) {
   return (
     <Pressable
@@ -48,18 +52,32 @@ export function RecipeCard({
       <View style={styles.body}>
         <View style={styles.row}>
           <Text style={styles.category}>{recipe.category}</Text>
-          {showPublicToggle ? (
-            <Pressable onPress={onTogglePublic} style={styles.visibilityPill}>
-              <Ionicons
-                name={recipe.isPublic ? 'globe-outline' : 'lock-closed-outline'}
-                size={14}
-                color={recipe.isPublic ? palette.sage : palette.muted}
-              />
-              <Text style={styles.visibilityText}>
-                {recipe.isPublic ? 'Public' : 'Private'}
-              </Text>
-            </Pressable>
-          ) : null}
+          <View style={styles.topRightActions}>
+            {showPublicToggle ? (
+              <Pressable onPress={onTogglePublic} style={styles.visibilityPill}>
+                <Ionicons
+                  name={recipe.isPublic ? 'globe-outline' : 'lock-closed-outline'}
+                  size={14}
+                  color={recipe.isPublic ? palette.sage : palette.muted}
+                />
+                <Text style={styles.visibilityText}>
+                  {recipe.isPublic ? 'Public' : 'Private'}
+                </Text>
+              </Pressable>
+            ) : null}
+            {showMoreButton ? (
+              <Pressable
+                onPress={(event) => {
+                  event.stopPropagation();
+                  onMorePress?.();
+                }}
+                hitSlop={8}
+                style={styles.moreButton}
+              >
+                <Ionicons name="ellipsis-horizontal" size={18} color={palette.muted} />
+              </Pressable>
+            ) : null}
+          </View>
         </View>
 
         <Text style={styles.title}>{recipe.title}</Text>
@@ -159,6 +177,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     gap: 10,
+  },
+  topRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  moreButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: palette.cream,
   },
   category: {
     color: palette.sage,

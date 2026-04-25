@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   Modal,
   Pressable,
   ScrollView,
@@ -22,7 +23,6 @@ import {
   allergyFilters,
   categories,
   dietFilters,
-  mealPlanDays,
 } from '../utils/recipe';
 
 type RecipeFeedScreenProps = {
@@ -38,7 +38,6 @@ export function RecipeFeedScreen({ mode }: RecipeFeedScreenProps) {
     notifications,
     pantryItems,
     shoppingItems,
-    mealPlan,
     isBusy,
     signOut,
     refreshRecipes,
@@ -50,8 +49,6 @@ export function RecipeFeedScreen({ mode }: RecipeFeedScreenProps) {
     clearNotifications,
     togglePantryItem,
     toggleShoppingItem,
-    generateShoppingListFromRecipes,
-    setMealPlan,
   } = useApp();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -62,6 +59,24 @@ export function RecipeFeedScreen({ mode }: RecipeFeedScreenProps) {
   const [pantryInput, setPantryInput] = useState('');
   const [showNotifications, setShowNotifications] = useState(false);
   const [showPantry, setShowPantry] = useState(false);
+  const [menuRecipe, setMenuRecipe] = useState<Recipe | null>(null);
+  const [snackbarMessage, setSnackbarMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!snackbarMessage) return;
+    const timeout = setTimeout(() => setSnackbarMessage(null), 2200);
+    return () => clearTimeout(timeout);
+  }, [snackbarMessage]);
+
+  const handleDeleteSelected = async () => {
+    if (!selectedIds.length) return;
+    const idsToDelete = [...selectedIds];
+    await deleteRecipes(idsToDelete);
+    setSelectedIds([]);
+    setSnackbarMessage(
+      `${idsToDelete.length} ${idsToDelete.length === 1 ? 'recipe' : 'recipes'} deleted`,
+    );
+  };
 
   const recipes = useMemo(() => {
     const base =
@@ -104,13 +119,6 @@ export function RecipeFeedScreen({ mode }: RecipeFeedScreenProps) {
 
   const unreadCount = notifications.filter((item) => !item.isRead).length;
 
-  const cycleMealPlan = async (day: string) => {
-    const options = ['', ...myRecipes.map((recipe) => recipe.id)];
-    const currentIndex = options.indexOf(mealPlan[day] ?? '');
-    const nextId = options[(currentIndex + 1) % options.length] ?? '';
-    await setMealPlan(day, nextId);
-  };
-
   const pageTitle =
     mode === 'my'
       ? 'Your kitchen'
@@ -130,7 +138,7 @@ export function RecipeFeedScreen({ mode }: RecipeFeedScreenProps) {
       <View style={styles.header}>
         <View>
           <Text style={styles.pageTitle}>{pageTitle}</Text>
-          <Text style={styles.pageSubtitle}>Your recipes, planning, and favorites in one place.</Text>
+          <Text style={styles.pageSubtitle}>Your recipes and favorites in one place.</Text>
         </View>
 
         <View style={styles.headerActions}>
@@ -232,73 +240,14 @@ export function RecipeFeedScreen({ mode }: RecipeFeedScreenProps) {
           </View>
         </ScrollView>
 
-        {mode === 'my' ? (
-          <View style={styles.utilityGrid}>
-            <View style={styles.utilityCard}>
-              <Text style={styles.utilityTitle}>Meal Planner</Text>
-              <Text style={styles.utilityText}>
-                Tap a day to cycle through your recipes and build a quick weekly plan.
-              </Text>
-              <View style={styles.planList}>
-                {mealPlanDays.map((day) => {
-                  const assigned = myRecipes.find((recipe) => recipe.id === mealPlan[day]);
-                  return (
-                    <Pressable
-                      key={day}
-                      onPress={() => cycleMealPlan(day)}
-                      style={styles.dayRow}
-                    >
-                      <Text style={styles.dayLabel}>{day}</Text>
-                      <Text style={styles.dayValue} numberOfLines={1}>
-                        {assigned?.title ?? 'Unassigned'}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
-
-            <View style={styles.utilityCard}>
-              <Text style={styles.utilityTitle}>Shopping Helper</Text>
-              <Text style={styles.utilityText}>
-                Build a shopping list from your saved recipes, then check items off.
-              </Text>
-              <Pressable
-                style={styles.utilityButton}
-                onPress={() => generateShoppingListFromRecipes(myRecipes)}
-              >
-                <Text style={styles.utilityButtonText}>Generate From My Recipes</Text>
-              </Pressable>
-              <View style={styles.shoppingList}>
-                {shoppingItems.length ? (
-                  shoppingItems.map((item) => (
-                    <Pressable
-                      key={item}
-                      onPress={() => toggleShoppingItem(item)}
-                      style={styles.shoppingItem}
-                    >
-                      <Ionicons
-                        name="checkmark-circle-outline"
-                        size={18}
-                        color={palette.sage}
-                      />
-                      <Text style={styles.shoppingText}>{item}</Text>
-                    </Pressable>
-                  ))
-                ) : (
-                  <Text style={styles.emptySmall}>Your shopping list is empty.</Text>
-                )}
-              </View>
-            </View>
-          </View>
-        ) : null}
-
         {selectedIds.length ? (
           <View style={styles.selectionBar}>
             <Text style={styles.selectionText}>{selectedIds.length} selected</Text>
             <Pressable
               style={styles.deleteButton}
-              onPress={() => deleteRecipes(selectedIds)}
+              onPress={() => {
+                handleDeleteSelected().catch(() => undefined);
+              }}
             >
               <Text style={styles.deleteButtonText}>Delete</Text>
             </Pressable>
@@ -313,6 +262,7 @@ export function RecipeFeedScreen({ mode }: RecipeFeedScreenProps) {
               selectable={mode === 'my'}
               selected={selectedIds.includes(recipe.id)}
               showPublicToggle={mode === 'my'}
+              showMoreButton={mode === 'my'}
               showAuthor={mode !== 'my'}
               onPress={() => navigation.navigate('RecipeDetail', { recipeId: recipe.id })}
               onLongPress={
@@ -327,6 +277,7 @@ export function RecipeFeedScreen({ mode }: RecipeFeedScreenProps) {
               }
               onToggleFavorite={() => toggleFavorite(recipe)}
               onTogglePublic={() => togglePublic(recipe)}
+              onMorePress={() => setMenuRecipe(recipe)}
               onAuthorPress={() =>
                 navigation.navigate('UserProfile', {
                   userId: recipe.userId,
@@ -456,6 +407,77 @@ export function RecipeFeedScreen({ mode }: RecipeFeedScreenProps) {
           </ScrollView>
         </SafeAreaView>
       </Modal>
+
+      <Modal
+        visible={Boolean(menuRecipe)}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setMenuRecipe(null)}
+      >
+        <Pressable style={styles.contextBackdrop} onPress={() => setMenuRecipe(null)}>
+          <Pressable style={styles.contextMenu} onPress={() => undefined}>
+            <Text style={styles.contextTitle}>{menuRecipe?.title ?? 'Recipe'}</Text>
+            <Pressable
+              style={styles.contextAction}
+              onPress={() => {
+                if (!menuRecipe) return;
+                const targetRecipe = menuRecipe;
+                setMenuRecipe(null);
+                navigation.navigate('RecipeEditor', { recipeId: targetRecipe.id });
+              }}
+            >
+              <Ionicons name="create-outline" size={18} color={palette.ink} />
+              <Text style={styles.contextActionText}>Edit</Text>
+            </Pressable>
+            <Pressable
+              style={styles.contextAction}
+              onPress={() => {
+                if (!menuRecipe) return;
+                const targetRecipe = menuRecipe;
+                setMenuRecipe(null);
+                Alert.alert(
+                  'Delete recipe',
+                  `Delete "${targetRecipe.title}"?`,
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Delete',
+                      style: 'destructive',
+                      onPress: () => {
+                        setSelectedIds((current) =>
+                          current.filter((item) => item !== targetRecipe.id),
+                        );
+                        deleteRecipes([targetRecipe.id]).catch(() => undefined);
+                      },
+                    },
+                  ],
+                );
+              }}
+            >
+              <Ionicons name="trash-outline" size={18} color={palette.danger} />
+              <Text style={[styles.contextActionText, styles.contextDeleteText]}>Delete</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {mode === 'my' ? (
+        <Pressable
+          style={styles.fab}
+          onPress={() => navigation.navigate('RecipeEditor')}
+        >
+          <Ionicons name="add" size={24} color={palette.white} />
+          <Text style={styles.fabText}>Add</Text>
+        </Pressable>
+      ) : null}
+
+      {snackbarMessage ? (
+        <View style={styles.snackbarWrap} pointerEvents="none">
+          <View style={styles.snackbar}>
+            <Text style={styles.snackbarText}>{snackbarMessage}</Text>
+          </View>
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -543,64 +565,6 @@ const styles = StyleSheet.create({
   filterRow: {
     flexDirection: 'row',
     marginBottom: 4,
-  },
-  utilityGrid: {
-    gap: 14,
-    marginTop: 10,
-    marginBottom: 18,
-  },
-  utilityCard: {
-    backgroundColor: palette.white,
-    borderRadius: 26,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: palette.line,
-  },
-  utilityTitle: {
-    color: palette.ink,
-    fontSize: 18,
-    fontWeight: '900',
-  },
-  utilityText: {
-    marginTop: 6,
-    color: palette.muted,
-    lineHeight: 20,
-  },
-  utilityButton: {
-    marginTop: 14,
-    borderRadius: 16,
-    backgroundColor: palette.sage,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  utilityButtonText: {
-    color: palette.white,
-    fontWeight: '800',
-  },
-  planList: {
-    marginTop: 14,
-    gap: 10,
-  },
-  dayRow: {
-    borderRadius: 16,
-    backgroundColor: palette.paper,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: palette.line,
-  },
-  dayLabel: {
-    color: palette.muted,
-    fontWeight: '700',
-    fontSize: 12,
-  },
-  dayValue: {
-    marginTop: 4,
-    color: palette.ink,
-    fontWeight: '800',
-  },
-  shoppingList: {
-    marginTop: 12,
-    gap: 8,
   },
   shoppingItem: {
     flexDirection: 'row',
@@ -712,5 +676,88 @@ const styles = StyleSheet.create({
   emptySmall: {
     color: palette.muted,
     lineHeight: 20,
+  },
+  contextBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(29, 39, 33, 0.38)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  contextMenu: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: palette.white,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: palette.line,
+    padding: 16,
+    gap: 6,
+  },
+  contextTitle: {
+    color: palette.ink,
+    fontWeight: '800',
+    fontSize: 16,
+    marginBottom: 8,
+  },
+  contextAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+  },
+  contextActionText: {
+    color: palette.ink,
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  contextDeleteText: {
+    color: palette.danger,
+  },
+  fab: {
+    position: 'absolute',
+    right: 18,
+    bottom: 22,
+    backgroundColor: palette.sage,
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    height: 54,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    shadowColor: '#000',
+    shadowOpacity: 0.22,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  fabText: {
+    color: palette.white,
+    fontWeight: '800',
+    fontSize: 14,
+  },
+  snackbarWrap: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 18,
+    alignItems: 'center',
+  },
+  snackbar: {
+    backgroundColor: '#1F2E24',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  snackbarText: {
+    color: palette.white,
+    fontWeight: '700',
+    fontSize: 13,
   },
 });

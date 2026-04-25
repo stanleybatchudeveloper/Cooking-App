@@ -7,6 +7,7 @@ import { palette } from '../theme/tokens';
 import { useApp } from '../context/AppContext';
 import { AddRecipeScreen } from '../screens/AddRecipeScreen';
 import { AiImportScreen } from '../screens/AiImportScreen';
+import { MoreScreen } from '../screens/MoreScreen';
 import { RecipeDetailScreen } from '../screens/RecipeDetailScreen';
 import { RecipeFeedScreen } from '../screens/RecipeFeedScreen';
 import { StartScreen } from '../screens/StartScreen';
@@ -44,9 +45,9 @@ function MainTabs() {
           const iconName = {
             MyRecipes: 'restaurant-outline',
             Explore: 'compass-outline',
-            Add: 'add-circle-outline',
             AIImport: 'sparkles-outline',
             Favorites: 'heart-outline',
+            More: 'ellipsis-horizontal-circle-outline',
           }[route.name] as keyof typeof Ionicons.glyphMap;
 
           return <Ionicons name={iconName} size={size} color={color} />;
@@ -59,9 +60,6 @@ function MainTabs() {
       <Tabs.Screen name="Explore">
         {() => <RecipeFeedScreen mode="explore" />}
       </Tabs.Screen>
-      <Tabs.Screen name="Add">
-        {() => <AddRecipeScreen embedded />}
-      </Tabs.Screen>
       <Tabs.Screen
         name="AIImport"
         component={AiImportScreen}
@@ -70,6 +68,7 @@ function MainTabs() {
       <Tabs.Screen name="Favorites">
         {() => <RecipeFeedScreen mode="favorites" />}
       </Tabs.Screen>
+      <Tabs.Screen name="More" component={MoreScreen} />
     </Tabs.Navigator>
   );
 }

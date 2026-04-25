@@ -2,12 +2,33 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const repoRoot = path.resolve(__dirname, '..', '..');
-const googleServicesPath = path.join(repoRoot, 'app', 'google-services.json');
+const projectRoot = path.resolve(__dirname, '..');
+const candidateGoogleServicesPaths = [
+  path.join(repoRoot, 'app', 'google-services.json'),
+  path.join(projectRoot, 'google-services.json'),
+  path.join(projectRoot, 'android', 'app', 'google-services.json'),
+];
 const outputDir = path.join(__dirname, '..', 'src', 'generated');
 const outputPath = path.join(outputDir, 'firebase-config.ts');
+const googleServicesPath = candidateGoogleServicesPaths.find((item) => fs.existsSync(item));
 
-if (!fs.existsSync(googleServicesPath)) {
-  throw new Error(`Missing Firebase config at ${googleServicesPath}`);
+if (!googleServicesPath) {
+  if (fs.existsSync(outputPath)) {
+    console.warn(
+      [
+        'No google-services.json found. Keeping existing generated Firebase config.',
+        `Searched: ${candidateGoogleServicesPaths.join(', ')}`,
+      ].join('\n'),
+    );
+    process.exit(0);
+  }
+
+  throw new Error(
+    [
+      'Missing Firebase config. Add one of the following files or create src/generated/firebase-config.ts:',
+      ...candidateGoogleServicesPaths,
+    ].join('\n'),
+  );
 }
 
 const googleServices = JSON.parse(fs.readFileSync(googleServicesPath, 'utf8'));

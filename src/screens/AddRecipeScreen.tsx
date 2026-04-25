@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { TagChip } from '../components/TagChip';
 import { useApp } from '../context/AppContext';
 import { localStore, storageKeys } from '../lib/storage';
+import { useVoiceRecording } from '../lib/voiceRecording';
 import { palette } from '../theme/tokens';
 import type { StepData } from '../types/models';
 import {
@@ -383,63 +384,99 @@ export function AddRecipeScreen({
         </EditorCard>
 
         <EditorCard title="Cooking Steps">
-          {steps.map((step, index) => (
-            <View key={`${index}-${step.instruction}`} style={styles.stepCard}>
-              <View style={styles.stepHeader}>
-                <Text style={styles.stepTitle}>Step {index + 1}</Text>
-                {steps.length > 1 ? (
+          {steps.map((step, index) => {
+            const { isRecording, startRecording, stopRecording } = useVoiceRecording((text) => {
+              setSteps((current) =>
+                current.map((item, itemIndex) =>
+                  itemIndex === index
+                    ? { ...item, instruction: item.instruction + (item.instruction ? ' ' : '') + text }
+                    : item,
+                ),
+              );
+            });
+
+            return (
+              <View key={`${index}-${step.instruction}`} style={styles.stepCard}>
+                <View style={styles.stepHeader}>
+                  <Text style={styles.stepTitle}>Step {index + 1}</Text>
+                  {steps.length > 1 ? (
+                    <Pressable
+                      onPress={() =>
+                        setSteps((current) => current.filter((_, item) => item !== index))
+                      }
+                    >
+                      <Ionicons name="trash-outline" size={18} color={palette.danger} />
+                    </Pressable>
+                  ) : null}
+                </View>
+                <View style={styles.labelRow}>
+                  <Text style={styles.inputLabel}>Instructions</Text>
                   <Pressable
-                    onPress={() =>
-                      setSteps((current) => current.filter((_, item) => item !== index))
-                    }
+                    style={[
+                      styles.voiceButton,
+                      isRecording ? styles.voiceButtonRecording : undefined,
+                    ]}
+                    onPress={isRecording ? stopRecording : startRecording}
                   >
-                    <Ionicons name="trash-outline" size={18} color={palette.danger} />
+                    <Ionicons
+                      name={isRecording ? 'stop-circle' : 'mic-outline'}
+                      size={16}
+                      color={isRecording ? palette.danger : palette.sage}
+                    />
+                    <Text
+                      style={[
+                        styles.voiceButtonText,
+                        isRecording ? styles.voiceStopText : undefined,
+                      ]}
+                    >
+                      {isRecording ? 'Stop' : 'Talk'}
+                    </Text>
                   </Pressable>
-                ) : null}
-              </View>
-              <TextInput
-                value={step.instruction}
-                onChangeText={(value) =>
-                  setSteps((current) =>
-                    current.map((item, itemIndex) =>
-                      itemIndex === index ? { ...item, instruction: value } : item,
-                    ),
-                  )
-                }
-                multiline
-                placeholder="Describe the step..."
-                placeholderTextColor="#98A19B"
-                style={[styles.input, styles.multilineInput]}
-              />
-              <View style={styles.row}>
-                <NumericInput
-                  label="Timer (sec)"
-                  value={step.timerSeconds ? String(step.timerSeconds) : ''}
+                </View>
+                <TextInput
+                  value={step.instruction}
                   onChangeText={(value) =>
                     setSteps((current) =>
                       current.map((item, itemIndex) =>
-                        itemIndex === index
-                          ? { ...item, timerSeconds: Number(value || 0) }
-                          : item,
+                        itemIndex === index ? { ...item, instruction: value } : item,
                       ),
                     )
                   }
+                  multiline
+                  placeholder="Describe the step..."
+                  placeholderTextColor="#98A19B"
+                  style={[styles.input, styles.multilineInput]}
+                />
+                <View style={styles.row}>
+                  <NumericInput
+                    label="Timer (sec)"
+                    value={step.timerSeconds ? String(step.timerSeconds) : ''}
+                    onChangeText={(value) =>
+                      setSteps((current) =>
+                        current.map((item, itemIndex) =>
+                          itemIndex === index
+                            ? { ...item, timerSeconds: Number(value || 0) }
+                            : item,
+                        ),
+                      )
+                    }
+                  />
+                </View>
+                <LabeledInput
+                  label="Special Note"
+                  value={step.specialNote}
+                  onChangeText={(value) =>
+                    setSteps((current) =>
+                      current.map((item, itemIndex) =>
+                        itemIndex === index ? { ...item, specialNote: value } : item,
+                      ),
+                    )
+                  }
+                  multiline
                 />
               </View>
-              <LabeledInput
-                label="Special Note"
-                value={step.specialNote}
-                onChangeText={(value) =>
-                  setSteps((current) =>
-                    current.map((item, itemIndex) =>
-                      itemIndex === index ? { ...item, specialNote: value } : item,
-                    ),
-                  )
-                }
-                multiline
-              />
-            </View>
-          ))}
+            );
+          })}
 
           <Pressable
             style={styles.addStepButton}
@@ -490,9 +527,55 @@ function LabeledInput({
   multiline?: boolean;
   helper?: string;
 }) {
+  const { isRecording, startRecording, stopRecording, liveTranscript, detectedLanguage, confidence } = useVoiceRecording((text) => {
+    onChangeText(value + (value ? ' ' : '') + text);
+  });
+
+  const getLangEmoji = (lang: string) => {
+    const langEmojis: { [key: string]: string } = {
+      'en': '🇺🇸', 'es': '🇪🇸', 'fr': '🇫🇷', 'de': '🇩🇪', 'it': '🇮🇹',
+      'pt': '🇵🇹', 'ru': '🇷🇺', 'ja': '🇯🇵', 'zh': '🇨🇳', 'ko': '🇰🇷',
+    };
+    return langEmojis[lang] || '🌐';
+  };
+
   return (
     <View style={styles.inputGroup}>
-      <Text style={styles.inputLabel}>{label}</Text>
+      <View style={styles.labelRow}>
+        <Text style={styles.inputLabel}>{label}</Text>
+        <View style={styles.voiceControlsWrapper}>
+          {isRecording && (
+            <View style={styles.liveIndicator}>
+              <View style={styles.recordingDot} />
+              <Text style={styles.recordingText}>
+                {getLangEmoji(detectedLanguage)} {confidence}%
+              </Text>
+            </View>
+          )}
+          <Pressable
+            style={[
+              styles.voiceButton,
+              isRecording ? styles.voiceButtonRecording : undefined,
+            ]}
+            onPress={isRecording ? stopRecording : startRecording}
+          >
+            <Ionicons
+              name={isRecording ? 'stop-circle' : 'mic-outline'}
+              size={18}
+              color={isRecording ? palette.danger : palette.sage}
+            />
+            <Text style={[styles.voiceButtonText, isRecording ? styles.voiceStopText : undefined]}>
+              {isRecording ? 'Stop' : 'Talk'}
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+      {isRecording && liveTranscript ? (
+        <View style={styles.liveTranscriptBox}>
+          <Text style={styles.liveTranscriptLabel}>Live Transcript</Text>
+          <Text style={styles.liveTranscriptText}>{liveTranscript}</Text>
+        </View>
+      ) : null}
       <TextInput
         value={value}
         onChangeText={onChangeText}
@@ -514,9 +597,53 @@ function NumericInput({
   value: string;
   onChangeText: (value: string) => void;
 }) {
+  const { isRecording, startRecording, stopRecording, liveTranscript, detectedLanguage, confidence } = useVoiceRecording((text) => {
+    const numbers = text.replace(/\D/g, '');
+    if (numbers) onChangeText(numbers);
+  });
+
+  const getLangEmoji = (lang: string) => {
+    const langEmojis: { [key: string]: string } = {
+      'en': '🇺🇸', 'es': '🇪🇸', 'fr': '🇫🇷', 'de': '🇩🇪', 'it': '🇮🇹',
+      'pt': '🇵🇹', 'ru': '🇷🇺', 'ja': '🇯🇵', 'zh': '🇨🇳', 'ko': '🇰🇷',
+    };
+    return langEmojis[lang] || '🌐';
+  };
+
   return (
     <View style={[styles.inputGroup, styles.flexInput]}>
-      <Text style={styles.inputLabel}>{label}</Text>
+      <View style={styles.labelRow}>
+        <Text style={styles.inputLabel}>{label}</Text>
+        <View style={styles.voiceControlsWrapper}>
+          {isRecording && (
+            <View style={styles.liveIndicator}>
+              <View style={styles.recordingDot} />
+              <Text style={styles.recordingText}>
+                {getLangEmoji(detectedLanguage)} {confidence}%
+              </Text>
+            </View>
+          )}
+          <Pressable
+            style={[
+              styles.voiceButton,
+              isRecording ? styles.voiceButtonRecording : undefined,
+            ]}
+            onPress={isRecording ? stopRecording : startRecording}
+          >
+            <Ionicons
+              name={isRecording ? 'stop-circle' : 'mic-outline'}
+              size={16}
+              color={isRecording ? palette.danger : palette.sage}
+            />
+          </Pressable>
+        </View>
+      </View>
+      {isRecording && liveTranscript ? (
+        <View style={styles.liveTranscriptBox}>
+          <Text style={styles.liveTranscriptLabel}>Live Transcript</Text>
+          <Text style={styles.liveTranscriptText}>{liveTranscript}</Text>
+        </View>
+      ) : null}
       <TextInput
         value={value}
         onChangeText={onChangeText}
@@ -635,10 +762,80 @@ const styles = StyleSheet.create({
   inputGroup: {
     marginBottom: 14,
   },
+  labelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   inputLabel: {
     color: palette.muted,
     fontWeight: '700',
+  },
+  voiceButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: '#F0F8F1',
+  },
+  voiceButtonRecording: {
+    backgroundColor: '#FFE8EB',
+  },
+  voiceButtonText: {
+    color: palette.sage,
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  voiceStopText: {
+    color: palette.danger,
+  },
+  voiceControlsWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  liveIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: '#FFE8EB',
+  },
+  recordingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: palette.danger,
+  },
+  recordingText: {
+    fontSize: 11,
+    color: palette.danger,
+    fontWeight: '600',
+  },
+  liveTranscriptBox: {
+    marginTop: 8,
     marginBottom: 8,
+    padding: 12,
+    backgroundColor: '#FFFBEB',
+    borderRadius: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: palette.orange,
+  },
+  liveTranscriptLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: palette.muted,
+    marginBottom: 4,
+  },
+  liveTranscriptText: {
+    fontSize: 14,
+    color: palette.ink,
+    lineHeight: 20,
   },
   input: {
     minHeight: 52,
